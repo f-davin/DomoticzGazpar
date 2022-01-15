@@ -19,7 +19,7 @@
 #
 
 """
-<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.1.0" externallink="https://github.com/DavTechNet/DomoticzGazpar">
+<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.2.0" externallink="https://github.com/DavTechNet/DomoticzGazpar">
     <description>
         <h2>Gazpar plugin</h2><br/>
         This plugin permits the get the gas consommation information from the GRDF website.
@@ -55,8 +55,7 @@ from datetime import datetime
 from datetime import date
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
-import urllib.request
-import time
+
 
 LOGIN_BASE_URI = 'https://login.monespace.grdf.fr/sofit-account-api/api/v1/auth'
 API_BASE_URI = 'https://monespace.grdf.fr/'
@@ -244,7 +243,8 @@ class BasePlugin:
                     self.setNextConnection()
                     self.sConnectionStep = "idle"
             except:
-                Domoticz.Error("Error during connection or reading values")
+                Domoticz.Error("Error during connection or reading values: state ", self.sConnectionStep)
+                self.sConnectionStep = "idle"
 
     def onStart(self):
         Domoticz.Debug("onStart called")
