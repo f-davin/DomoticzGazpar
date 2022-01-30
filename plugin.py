@@ -19,7 +19,7 @@
 #
 
 """
-<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.2.0" externallink="https://github.com/DavTechNet/DomoticzGazpar">
+<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.2.1" externallink="https://github.com/DavTechNet/DomoticzGazpar">
     <description>
         <h2>Gazpar plugin</h2><br/>
         This plugin permits the get the gas consommation information from the GRDF website.
@@ -242,8 +242,11 @@ class BasePlugin:
                     self.update_counters(dtostr(start_date), dtostr(end_date))
                     self.setNextConnection()
                     self.sConnectionStep = "idle"
+                else:
+                    Domoticz.Error("Wrong connection step: state = ", str(self.sConnectionStep), ". Reset state to idle")
+                    self.sConnectionStep = "idle"
             except:
-                Domoticz.Error("Error during connection or reading values: state ", self.sConnectionStep)
+                Domoticz.Error("Error during connection or reading values: state ", str(self.sConnectionStep))
                 self.sConnectionStep = "idle"
 
     def onStart(self):
