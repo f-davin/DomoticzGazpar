@@ -19,7 +19,7 @@
 #
 
 """
-<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.2.1" externallink="https://github.com/DavTechNet/DomoticzGazpar">
+<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.3.0" externallink="https://github.com/DavTechNet/DomoticzGazpar">
     <description>
         <h2>Gazpar plugin</h2><br/>
         This plugin permits the get the gas consommation information from the GRDF website.
@@ -56,7 +56,6 @@ from datetime import date
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
-
 LOGIN_BASE_URI = 'https://login.monespace.grdf.fr/sofit-account-api/api/v1/auth'
 API_BASE_URI = 'https://monespace.grdf.fr/'
 
@@ -69,7 +68,7 @@ class BasePlugin:
     # Name of the Linky device
     sDeviceName: str = "Gazpar"
     # string: description of the Linky device
-    sDescription : str = "Compteur Gazpar"
+    sDescription: str = "Compteur Gazpar"
     # integer: type (pTypeGeneral)
     iType: int = 0xF3
     # integer: subtype (sTypeManagedCounter)
@@ -83,21 +82,24 @@ class BasePlugin:
     # Password for GRDF website
     password = None
     # History to read in day
-    nb_days:int = 1
+    nb_days: int = 1
     # PCE point
-    pce:str = None
+    pce: str = None
     # State machine
     sConnectionStep: str = None
     # Session of connection
     session = None
 
     def __init__(self):
+        self.nextConnection = None
         self.isStarted = False
         self.sConnectionStep = "idle"
         return
 
-        # Create Domoticz device
     def createDevice(self):
+        """
+        Create Domoticz device
+        """
         # Only if not already done
         if not self.iIndexUnit in Devices:
             Domoticz.Device(Name=self.sDeviceName, Unit=self.iIndexUnit, Type=self.iType, Subtype=self.iSubType,
@@ -108,22 +110,29 @@ class BasePlugin:
                 return False
         return True
 
-        # Create device and insert usage in Domoticz DB
     def createAndAddToDevice(self, usage, Date):
-        if not self.createDevice():
-            return False
-        self.addToDevice(usage, Date)
-        return True
+        """
+        Create device and insert usage in Domoticz DB
+        """
+        ret = False
+        if self.createDevice():
+            self.addToDevice(usage, Date)
+            ret = True
+        return ret
 
-    # insert usage in Domoticz DB
     def addToDevice(self, fConsumption: float, sDate: str):
+        """
+        Insert usage in Domoticz DB
+        """
         # -1.0 for counter because Gazpar doesn't provide absolute counter value via Enedis website
         sValue = "-1.0;" + str(fConsumption * 1000) + ";" + sDate
         Devices[self.iIndexUnit].Update(nValue=0, sValue=sValue, Type=self.iType, Subtype=self.iSubType,
                                         Switchtype=self.iSwitchType)
 
-    # Update value shown on Domoticz dashboard
     def updateDevice(self, usage):
+        """
+        Update value shown on Domoticz dashboard
+        """
         if not self.createDevice():
             return False
         # -1.0 for counter because Gazpar doesn't provide absolute counter value via GRDF website
@@ -132,18 +141,19 @@ class BasePlugin:
                                         Switchtype=self.iSwitchType)
         return True
 
-        # Calculate next complete grab, for tomorrow between 5 and 6 am if tomorrow is true, for next hour otherwise
-    
     def setNextConnection(self):
+        """
+        Calculate next complete grab, for tomorrow between 5 and 6 am if tomorrow is true, for next hour otherwise
+        """
         # Next treatment, tomorrow 6:00 pm
         # self.nextConnection = datetime.now() + timedelta(minutes=1)
         # Domoticz.Log('Next connection: ' + str(self.nextConnection))
         self.nextConnection = datetime.now() + timedelta(days=1)
         self.nextConnection = self.nextConnection.replace(hour=18)
 
-    
     def login(self):
-        """Logs the user into the GRDF API.
+        """
+        Logs the user into the GRDF API.
         """
         session = requests.Session()
 
@@ -155,19 +165,18 @@ class BasePlugin:
         }
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Referer': 'https://login.monespace.grdf.fr/mire/connexion?goto=https:%2F%2Fsofa-connexion.grdf.fr:443%2Fopenam%2Foauth2%2FexterneGrdf%2Fauthorize%3Fresponse_type%3Dcode%26scope%3Dopenid%2520profile%2520email%2520infotravaux%2520%252Fv1%252Faccreditation%2520%252Fv1%252Faccreditations%2520%252Fdigiconso%252Fv1%2520%252Fdigiconso%252Fv1%252Fconsommations%2520new_meg%2520%252FDemande.read%2520%252FDemande.write%26client_id%3Dprod_espaceclient%26state%3D0%26redirect_uri%3Dhttps%253A%252F%252Fmonespace.grdf.fr%252F_codexch%26nonce%3D7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag%26by_pass_okta%3D1%26capp%3Dmeg&realm=%2FexterneGrdf&capp=meg'
+            'Referer': 'https://login.monespace.grdf.fr/mire/connexion?goto=https:%2F%2Fsofa-connexion.grdf.fr:443%2Fopenam%2Foauth2%2FexterneGrdf%2Fauthorize%3Fresponse_type%3Dcode%26scope%3Dopenid%2520profile%2520email%2520infotravaux%2520%252Fv1%252Faccreditation%2520%252Fv1%252Faccreditations%2520%252Fdigiconso%252Fv1%2520%252Fdigiconso%252Fv1%252Fconsommations%2520new_meg%2520%252FDemande.read%2520%252FDemande.write%26client_id%3Dprod_espaceclient%26state%3D0%26redirect_uri%3Dhttps%253A%252F%252Fmonespace.grdf.fr%252F_codexch%26nonce%3D7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag%26by_pass_okta%3D1%26capp%3Dmeg&realm=%2FexterneGrdf&capp=meg',
+            'domain': 'grdf.fr'
         }
 
         resp1 = session.post(LOGIN_BASE_URI, data=payload, headers=headers)
-        #Domoticz.Debug("1st Auth Response : \n" + resp1.text)
+        # Domoticz.Debug("1st Auth Response : \n" + resp1.text)
         if resp1.status_code != requests.codes.ok:
-            print("Login call - error status :" + resp1.status_code + '\n');
-            Domoticz.Error("Login call - error status :" + resp1.status_code + '\n')
-            raise RuntimeError("Login call - error status :" + resp1.status_code)
+            Domoticz.Error("Login call - error status :" + str(resp1.status_code) + '\n')
+            raise RuntimeError("Login call - error status :" + str(resp1.status_code))
 
         j = json.loads(resp1.text)
         if j['state'] != "SUCCESS":
-            print("Login call - error status :" + j['state'] + '\n');
             Domoticz.Error("Login call - error status :" + j['state'] + '\n')
             raise RuntimeError("Login call - error status :" + j['state'])
 
@@ -177,11 +186,10 @@ class BasePlugin:
         }
 
         resp2 = session.get(API_BASE_URI, allow_redirects=True)
-        #Domoticz.Debug("2nd API Response : \n" + resp2.text)
+        # Domoticz.Debug("2nd API Response : \n" + resp2.text)
         if resp2.status_code != requests.codes.ok:
-            print("Login 2nd call - error status :" + resp2.status_code + '\n');
-            Domoticz.Error("Login 2nd call - error status :" + resp2.status_code + '\n')
-            raise RuntimeError("Login call - error status :" + resp2.status_code)
+            Domoticz.Error("Login 2nd call - error status :" + str(resp2.status_code) + '\n')
+            raise RuntimeError("Login call - error status :" + str(resp2.status_code))
 
         return session
 
@@ -192,8 +200,7 @@ class BasePlugin:
         # resp3 = self.session.get('https://monespace.grdf.fr/api/e-connexion/users/pce/historique-consultation')
         # Domoticz.Log("Get NumPce Response : \n" + resp3.text)
         # if resp3.status_code != requests.codes.ok:
-        #     print("Get NumPce call - error status :", resp3.status_code, '\n');
-        #     Domoticz.Error("Get NumPce call - error status :", resp3.status_code, '\n')
+        #     Domoticz.Error("Get NumPce call - error status :", str(resp3.status_code), '\n')
         #     exit()
 
         # j = json.loads(resp3.text)
@@ -218,14 +225,15 @@ class BasePlugin:
             #     Domoticz.Error(req_date, conso, index, "Invalid Entry")
             #     continue
 
-            # print(req_date, conso, index)
+            # if conso is not None:
             self.addToDevice(conso, str(req_date))
 
     def get_data_with_interval(self, resource_id, start_date=None, end_date=None):
-        r = self.session.get('https://monespace.grdf.fr/api/e-conso/pce/consommation/informatives?dateDebut=' + start_date + '&dateFin=' + end_date + '&pceList[]=' + str(self.pce))
-        #Domoticz.Debug("Data : \n" + r.text)
+        r = self.session.get(
+            'https://monespace.grdf.fr/api/e-conso/pce/consommation/informatives?dateDebut=' + start_date + '&dateFin=' + end_date + '&pceList[]=' + str(
+                self.pce))
+        # Domoticz.Debug("Data : \n" + r.text)
         if r.status_code != requests.codes.ok:
-            print("Get data - error status :" + r.status_code + '\n');
             Domoticz.Error("Get data - error status :", r.status_code, '\n')
             raise RuntimeError("Get data - error status :", r.status_code, '\n')
         return r.text
@@ -233,20 +241,26 @@ class BasePlugin:
     def handleConnection(self):
         if datetime.now() > self.nextConnection:
             try:
+                # Domoticz.Debug("Current state: ", str(self.sConnectionStep))
                 if self.sConnectionStep == "idle":
                     self.session = self.login()
+                    # Domoticz.Debug("Login success")
                     self.sConnectionStep = "connected"
                 elif self.sConnectionStep == "connected":
                     end_date = date.today()
                     start_date = end_date - relativedelta(days=int(self.nb_days))
+                    # Domoticz.Debug("Start date: ", str(start_date), "\tEnd date: ", str(end_date))
                     self.update_counters(dtostr(start_date), dtostr(end_date))
+                    # Domoticz.Debug("Counter updated")
                     self.setNextConnection()
+                    # Domoticz.Debug("Next connection setted")
                     self.sConnectionStep = "idle"
                 else:
-                    Domoticz.Error("Wrong connection step: state = ", str(self.sConnectionStep), ". Reset state to idle")
+                    Domoticz.Error("Wrong connection step: state = ", str(self.sConnectionStep),
+                                   ". Reset state to idle")
                     self.sConnectionStep = "idle"
             except:
-                Domoticz.Error("Error during connection or reading values: state ", str(self.sConnectionStep))
+                Domoticz.Error("Error during connection or reading values: state %1", str(self.sConnectionStep))
                 self.sConnectionStep = "idle"
 
     def onStart(self):
@@ -256,16 +270,11 @@ class BasePlugin:
         self.nb_days = Parameters["Mode3"]
         self.pce = Parameters["Mode4"]
 
-        try:
-            self.iDebugLevel = int(Parameters["Mode6"])
-        except ValueError:
-            self.iDebugLevel = 0
-
-        if self.iDebugLevel > 1:
+        if Parameters["Mode6"] == "Debug":
             Domoticz.Debugging(1)
-
-        # most init
-        self.__init__()
+            # Domoticz.Log("Debugger started, use 'telnet 0.0.0.0 4444' to connect")
+            # import rpdb
+            # rpdb.set_trace()
 
         if self.createDevice():
             self.nextConnection = datetime.now()
