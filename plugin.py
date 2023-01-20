@@ -19,13 +19,13 @@
 #
 
 """
-<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.3.0" externallink="https://github.com/DavTechNet/DomoticzGazpar">
+<plugin key="Gazpar" name="Compteur gaz Gazpar" author="DavTechNet" version="0.3.1" externallink="https://github.com/DavTechNet/DomoticzGazpar">
     <description>
         <h2>Gazpar plugin</h2><br/>
         This plugin permits the get the gas consommation information from the GRDF website.
         Based on https://github.com/Scrat95220/DomoticzGazpar.git.
         <h3>Configuration</h3>
-        Enter the following informations to configure the plugin:
+        Enter the following information to configure the plugin:
         <ul style="list-style-type:square">
             <li>GRDF site login</li>
             <li>GRDF site password</li>
@@ -176,7 +176,7 @@ class BasePlugin:
             }
 
         response = session.post ( LOGIN_BASE_URI, data = payload, headers = headers )
-        Domoticz.Debug ( "1st Auth Response : \n" + response.text )
+        Domoticz.Debug ( "First Auth Response : \n" + response.text )
         status_code = str ( response.status_code )
         if response.status_code != requests.codes.ok:
             error = ''
@@ -184,8 +184,8 @@ class BasePlugin:
                 error = 'client error (code: {0}'.format ( status_code )
             else:
                 error = 'server error (code: {0}'.format ( status_code )
-            Domoticz.Error ( "Login call - " + error + '\n' )
-            raise RuntimeError ( "Login call - " + error )
+            Domoticz.Error ( "First login request - " + error + '\n' )
+            raise RuntimeError ( "First login request - " + error )
         else:
             Domoticz.Debug ( "Status code of first request: " + status_code )
 
@@ -205,11 +205,18 @@ class BasePlugin:
             'Referer': 'https://sofa-connexion.grdf.fr:443/openam/oauth2/externeGrdf/authorize?response_type=code&scope=openid profile email infotravaux /v1/accreditation /v1/accreditations /digiconso/v1 /digiconso/v1/consommations new_meg /Demande.read /Demande.write&client_id=prod_espaceclient&state=0&redirect_uri=https://monespace.grdf.fr/_codexch&nonce=7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag&by_pass_okta=1&capp=meg'
             }
 
-        resp2 = session.get ( API_BASE_URI, allow_redirects = True )
-        # Domoticz.Debug("2nd API Response : \n" + resp2.text)
-        if resp2.status_code != requests.codes.ok:
-            Domoticz.Error ( "Login 2nd call - error status :" + str ( resp2.status_code ) + '\n' )
-            raise RuntimeError ( "Login call - error status :" + str ( resp2.status_code ) )
+        response = session.get ( API_BASE_URI, allow_redirects = True )
+        Domoticz.Debug ( "Second auth Response : \n" + response.text )
+        if response.status_code != requests.codes.ok:
+            error = ''
+            if response.status_code >= 500:
+                error = 'client error (code: {0}'.format ( status_code )
+            else:
+                error = 'server error (code: {0}'.format ( status_code )
+            Domoticz.Error ( "Second login request - " + error + '\n' )
+            raise RuntimeError ( "Second login request - " + error )
+        else:
+            Domoticz.Debug ( "Session opened with success" )
 
         return session
 
