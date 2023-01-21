@@ -173,7 +173,7 @@ class BasePlugin:
         else:
             log_message ( LogLevel.Debug, 'Cookies ok.' )
 
-        auth_nonce = self.session.cookies.get ( 'auth_nonce' )
+        auth_nonce = session.cookies.get ( 'auth_nonce' )
         log_message ( LogLevel.Debug, "auth_nonce: " + auth_nonce )
 
         payload = {
