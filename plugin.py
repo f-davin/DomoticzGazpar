@@ -59,7 +59,9 @@ import requests
 from dateutil.relativedelta import relativedelta
 
 LOGIN_BASE_URI = 'https://login.monespace.grdf.fr/sofit-account-api/api/v1/auth'
-API_BASE_URI = 'https://monespace.grdf.fr/'
+API_USER_URI = 'https://monespace.grdf.fr/api/e-connexion/users/whoami'
+AUTH_NONE_URI = 'https://monespace.grdf.fr/client/particulier/accueil'
+DELAY_BETWEEN_REQUESTS = 1  # Delay in seconds
 
 
 @unique
@@ -87,24 +89,16 @@ class BasePlugin:
     sub_type: int = 0x21
     # integer: switch type (Energy)
     switch_type: int = 0
-    # Username for GRDF website
-    username = None
-    # Password for GRDF website
-    password = None
-    # History to read in day
-    nb_days: int = 1
-    # PCE point
-    pce: str = None
-    # State machine
-    connection_step: str = None
-    # Session of connection
-    session = None
 
     def __init__ ( self ):
-        self.nextConnection = None
-        self.is_started = False
-        self.connection_step = "idle"
-        return
+        self.username: str = None  # Username for GRDF website
+        self.password: str = None  # Password for GRDF website
+        self.nb_days: int = 1  # History to read in day
+        self.next_connection: datetime = None
+        self.is_started: bool = False
+        self.connection_step: str = "idle"  # Default connection step
+        self.session: requests.Session = None
+        self.pce: str = None
 
     def createDevice ( self ):
         """
@@ -156,15 +150,15 @@ class BasePlugin:
                                              )
         return True
 
-    def setNextConnection ( self ):
+    def set_next_connection ( self ):
         """
         Calculate next complete grab, for tomorrow between 5 and 6 am if tomorrow is true, for next hour otherwise
         """
         # Next treatment, tomorrow 6:00 pm
-        self.nextConnection = datetime.now ( ) + timedelta ( minutes = 1 )
-        log_message ( LogLevel.Notice, 'Next connection: ' + str ( self.nextConnection ) )
-        # self.nextConnection = datetime.now() + timedelta(days=1)
-        # self.nextConnection = self.nextConnection.replace(hour=18)
+        self.next_connection = datetime.now ( ) + timedelta ( minutes = 1 )
+        log_message ( LogLevel.Notice, 'Next connection: ' + str ( self.next_connection ) )
+        # self.next_connection = datetime.now() + timedelta(days=1)
+        # self.next_connection = self.next_connection.replace(hour=18)
 
     def login ( self ):
         """
@@ -172,15 +166,25 @@ class BasePlugin:
         """
         session = requests.Session ( )
 
+        # Get cookie
+        req = session.get ( AUTH_NONE_URI )
+        if not 'auth_nonce' in session.cookies:
+            log_message ( LogLevel.Error, 'Cannot get auth_nonce.' )
+        else:
+            log_message ( LogLevel.Debug, 'Cookies ok.' )
+
+        auth_nonce = self.session.cookies.get ( 'auth_nonce' )
+        log_message ( LogLevel.Debug, "auth_nonce: " + auth_nonce )
+
         payload = {
             'email'   : self.username,
             'password': self.password,
-            'goto'    : 'https://sofa-connexion.grdf.fr:443/openam/oauth2/externeGrdf/authorize?response_type=code%26scope=openid%20profile%20email%20infotravaux%20%2Fv1%2Faccreditation%20%2Fv1%2Faccreditations%20%2Fdigiconso%2Fv1%20%2Fdigiconso%2Fv1%2Fconsommations%20new_meg%20%2FDemande.read%20%2FDemande.write%26client_id=prod_espaceclient%26state=0%26redirect_uri=https%3A%2F%2Fmonespace.grdf.fr%2F_codexch%26nonce=7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag%26by_pass_okta=1%26capp=meg',
+            'goto'    : 'https://sofa-connexion.grdf.fr:443/openam/oauth2/externeGrdf/authorize',
             'capp'    : 'meg'
             }
         headers = {
             'Content-Type'   : 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Referer'        : 'https://login.monespace.grdf.fr/mire/connexion?goto=https:%2F%2Fsofa-connexion.grdf.fr:443%2Fopenam%2Foauth2%2FexterneGrdf%2Fauthorize%3Fresponse_type%3Dcode%26scope%3Dopenid%2520profile%2520email%2520infotravaux%2520%252Fv1%252Faccreditation%2520%252Fv1%252Faccreditations%2520%252Fdigiconso%252Fv1%2520%252Fdigiconso%252Fv1%252Fconsommations%2520new_meg%2520%252FDemande.read%2520%252FDemande.write%26client_id%3Dprod_espaceclient%26state%3D0%26redirect_uri%3Dhttps%253A%252F%252Fmonespace.grdf.fr%252F_codexch%26nonce%3D7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag%26by_pass_okta%3D1%26capp%3Dmeg&realm=%2FexterneGrdf&capp=meg',
+            # 'Referer'        : 'https://login.monespace.grdf.fr/mire/connexion?goto=https:%2F%2Fsofa-connexion.grdf.fr:443%2Fopenam%2Foauth2%2FexterneGrdf%2Fauthorize%3Fresponse_type%3Dcode%26scope%3Dopenid%2520profile%2520email%2520infotravaux%2520%252Fv1%252Faccreditation%2520%252Fv1%252Faccreditations%2520%252Fdigiconso%252Fv1%2520%252Fdigiconso%252Fv1%252Fconsommations%2520new_meg%2520%252FDemande.read%2520%252FDemande.write%26client_id%3Dprod_espaceclient%26state%3D0%26redirect_uri%3Dhttps%253A%252F%252Fmonespace.grdf.fr%252F_codexch%26nonce%3D7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag%26by_pass_okta%3D1%26capp%3Dmeg&realm=%2FexterneGrdf&capp=meg',
             'domain'         : 'grdf.fr',
             'User-Agent'     : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/99.0.4844.0 Safari/537.36',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -188,7 +192,8 @@ class BasePlugin:
             'Connection'     : 'keep-alive'
             }
 
-        response = session.post ( LOGIN_BASE_URI, data = payload, headers = headers )
+        # Login request
+        response = session.post ( LOGIN_BASE_URI, data = payload, headers = headers, allow_redirects = False )
         log_message ( LogLevel.Debug, "First Auth Response : \n" + response.text )
         status_code = str ( response.status_code )
         if response.status_code != requests.codes.ok:
@@ -217,27 +222,23 @@ class BasePlugin:
             log_message ( LogLevel.Error, 'An error occurs during login: \n\t' + error + '\n' )
             raise RuntimeError ( 'An error occurs during login: ' + error )
 
-        # 2nd request
-        headers = {
-            'Referer': 'https://sofa-connexion.grdf.fr:443/openam/oauth2/externeGrdf/authorize?response_type=code&scope=openid profile email infotravaux /v1/accreditation /v1/accreditations /digiconso/v1 /digiconso/v1/consommations new_meg /Demande.read /Demande.write&client_id=prod_espaceclient&state=0&redirect_uri=https://monespace.grdf.fr/_codexch&nonce=7cV89oGyWnw28DYdI-702Gjy9f5XdIJ_4dKE_hbsvag&by_pass_okta=1&capp=meg'
-            }
-
-        response = session.get ( API_BASE_URI, allow_redirects = True )
-        log_message ( LogLevel.Debug, "Second auth Response : \n" + response.text )
+        # Complete login by call whoami
+        response = session.get ( API_USER_URI, allow_redirects = True )
+        log_message ( LogLevel.Debug, "Whoami response : \n" + response.text )
         if response.status_code != requests.codes.ok:
             error = ''
             if response.status_code >= 500:
                 error = 'client error (code: {0}'.format ( status_code )
             else:
                 error = 'server error (code: {0}'.format ( status_code )
-            log_message ( LogLevel.Error, "Second login request - " + error + '\n' )
-            raise RuntimeError ( "Second login request - " + error )
+            log_message ( LogLevel.Error, "Whoami request - " + error + '\n' )
+            raise RuntimeError ( "Whoami request - " + error )
         else:
             log_message ( LogLevel.Debug, "Session opened with success" )
 
         return session
 
-    def update_counters ( self, start_date, end_date ):
+    def update_counters ( self, start_date: str, end_date: str ):
         log_message ( LogLevel.Debug, 'start_date: ' + start_date + "; end_date: " + end_date )
 
         data = self.get_data_with_interval ( 'Mois', start_date, end_date )
@@ -251,33 +252,24 @@ class BasePlugin:
             log_message ( LogLevel.Debug, "req_date: " + str ( req_date ) )
             conso = releve [ 'energieConsomme' ]
             log_message ( LogLevel.Debug, "energieConsomme: " + str ( conso ) )
-            # volume = releve['volumeBrutConsomme']
-            # indexm3 = releve['indexDebut']
-            # try:
-            #     index = index + conso
-            # except TypeError:
-            #     log_message ( LogLevel.Error, req_date, conso, index, "Invalid Entry")
-            #     continue
 
-            # if conso is not None:
             self.addToDevice ( conso, str ( req_date ) )
 
-    def get_data_with_interval ( self, resource_id, start_date = None, end_date = None ):
+    def get_data_with_interval ( self, resource_id, start_date: str = None, end_date: str = None ):
         r = self.session.get (
-            'https://monespace.grdf.fr/api/e-conso/pce/consommation/informatives?dateDebut=' + start_date + '&dateFin=' + end_date + '&pceList[]=' + str (
-                self.pce
-                )
+            'https://monespace.grdf.fr/api/e-conso/pce/consommation/informatives?dateDebut=' + start_date + '&dateFin=' + end_date + '&pceList[]=' + self.pce
+            # 'https://monespace.grdf.fr/api/e-conso/pce/consommation/publiees?dateDebut=' + start_date + '&dateFin=' + end_date + '&pceList[]=' + self.pce
             )
         log_message ( LogLevel.Debug, "Data : \n" + r.text )
         if r.status_code != requests.codes.ok:
-            log_message ( LogLevel.Error, "Get data - error status :", r.status_code, '\n' )
-            raise RuntimeError ( "Get data - error status :", r.status_code, '\n' )
+            log_message ( LogLevel.Error, "Get data - error status : {0}\n".format ( str ( r.status_code ) ) )
+            raise RuntimeError ( "Get data - error status : {0}".format ( str ( r.status_code ) ) )
         return r.text
 
-    def handleConnection ( self ):
-        if datetime.now ( ) > self.nextConnection:
+    def handle_connection ( self ):
+        if datetime.now ( ) > self.next_connection:
             try:
-                log_message ( LogLevel.Debug, "Current state: ", str ( self.connection_step ) )
+                log_message ( LogLevel.Debug, "Current state: {0}".format ( self.connection_step ) )
                 if self.connection_step == "idle":
                     self.session = self.login ( )
                     log_message ( LogLevel.Debug, "Login success" )
@@ -285,20 +277,23 @@ class BasePlugin:
                 elif self.connection_step == "connected":
                     end_date = date.today ( )
                     start_date = end_date - relativedelta ( days = int ( self.nb_days ) )
-                    log_message ( LogLevel.Debug, "Start date: ", str ( start_date ), "\tEnd date: ", str ( end_date ) )
+                    log_message ( LogLevel.Debug,
+                                  "Start date: {0}\tEnd date: {1}".format ( str ( start_date ), str ( end_date ) )
+                                  )
                     self.update_counters ( date_to_string ( start_date ), date_to_string ( end_date ) )
                     log_message ( LogLevel.Debug, "Counter updated" )
-                    self.setNextConnection ( )
-                    log_message ( LogLevel.Debug, "Next connection setted" )
+                    self.set_next_connection ( )
+                    log_message ( LogLevel.Debug, "Next connection set" )
                     self.connection_step = "idle"
                 else:
-                    log_message ( LogLevel.Error, "Wrong connection step: state = ", str ( self.connection_step ),
-                                  ". Reset state to idle"
+                    log_message ( LogLevel.Error, "Wrong connection step: state = {0}. Reset state to idle".format (
+                        self.connection_step
+                        )
                                   )
                     self.connection_step = "idle"
             except:
-                log_message ( LogLevel.Error, "Error during connection or reading values: state %1",
-                              str ( self.connection_step )
+                log_message ( LogLevel.Error,
+                              "Error during connection or reading values: state {0}".format ( self.connection_step )
                               )
                 self.connection_step = "idle"
 
@@ -316,9 +311,9 @@ class BasePlugin:
             # rpdb.set_trace()
 
         if self.createDevice ( ):
-            self.nextConnection = datetime.now ( )
+            self.next_connection = datetime.now ( )
         else:
-            self.setNextConnection ( )
+            self.set_next_connection ( )
 
         # Now we can enabling the plugin
         self.is_started = True
@@ -353,7 +348,7 @@ class BasePlugin:
 
     def onHeartbeat ( self ):
         log_message ( LogLevel.Debug, "onHeartbeat called" )
-        self.handleConnection ( )
+        self.handle_connection ( )
 
 
 global _plugin
